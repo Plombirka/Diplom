@@ -43,9 +43,11 @@ class SplashActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.progressBar)
         statusTextView = findViewById(R.id.statusTextView)
         retryButton = findViewById(R.id.retryButton)
+        loadingTextView = findViewById(R.id.loadingText)
 
         // Обработка нажатия кнопки "Повторить"
         retryButton.setOnClickListener {
+            loadingTextView.visibility = View.VISIBLE
             retryLoading()
         }
 
@@ -75,12 +77,10 @@ class SplashActivity : AppCompatActivity() {
                 if (groups.isNotEmpty()) {
                     navigateToMainActivity(groups)
                 } else {
-                    loadingTextView.visibility = View.GONE
                     showError("Ошибка загрузки данных")
                 }
             }
         } else {
-            loadingTextView.visibility = View.GONE
             showError("Нет подключения к интернету")
         }
     }
@@ -89,6 +89,7 @@ class SplashActivity : AppCompatActivity() {
         progressBar.visibility = View.GONE
         statusTextView.visibility = View.VISIBLE
         retryButton.visibility = View.VISIBLE
+        loadingTextView.visibility = View.GONE
         statusTextView.text = message
     }
 
