@@ -1,188 +1,397 @@
 <?xml version="1.0" encoding="utf-8"?>
-
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/rootLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:gravity="center"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/textView"
+    <!-- Кнопка "Войти", изначально видна -->
+
+    <!-- Основной контент, который будет подгружаться после успешного входа -->
+
+    <AutoCompleteTextView
+        android:id="@+id/textLogin"
+        android:layout_width="144dp"
+        android:layout_height="54dp"
+        android:layout_marginTop="216dp"
+        android:layout_marginBottom="15dp"
+        android:hint="Логин"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@+id/textPassword"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <AutoCompleteTextView
+        android:id="@+id/textPassword"
+        android:layout_width="143dp"
+        android:layout_height="53dp"
+        android:layout_marginBottom="15dp"
+        android:hint="Пароль"
+        android:password="true"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@+id/btnLogin"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <Button
+        android:id="@+id/btnLogin"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginTop="23dp"
-        android:layout_marginBottom="10dp"
-        android:text="Профиль"
-        android:textColorLink="#000000"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/constraintLayout"
+        android:layout_marginStart="161dp"
+        android:layout_marginTop="338dp"
+        android:layout_marginEnd="162dp"
+        android:layout_marginBottom="338dp"
+        android:padding="12dp"
+        android:text="Войти"
+        android:textSize="18sp"
+        android:visibility="visible"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/constraintLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginTop="51dp"
-        android:layout_marginEnd="20dp"
-        android:background="@drawable/rounded_background"
-        app:circularflow_defaultRadius="20dp"
+        android:id="@+id/contentContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
+        <!-- ******************** БЛОК "Профиль" ******************** -->
         <TextView
-            android:id="@+id/textView4"
+            android:id="@+id/labelProfile"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="11dp"
-            android:layout_marginTop="7dp"
-            android:layout_marginEnd="6dp"
-            android:text="TextView"
-            android:textColorLink="#000000"
-            android:textColor="@color/white"
-
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="20dp"
+            android:text="Профиль"
             android:textSize="20sp"
             android:textStyle="bold"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.102"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <TextView
-            android:id="@+id/textView5"
-            android:layout_width="wrap_content"
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/blockProfile"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="11dp"
+            android:layout_marginStart="20dp"
             android:layout_marginTop="8dp"
-            android:layout_marginBottom="9dp"
-            android:text="TextView"
-            android:textColor="@color/white"
-            android:textColorLink="#8F000000"
-            app:layout_constraintBottom_toBottomOf="parent"
+            android:layout_marginEnd="20dp"
+            android:background="@drawable/rounded_background"
+            android:padding="12dp"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/textView4" />
+            app:layout_constraintTop_toBottomOf="@id/labelProfile">
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+            <!-- Имя и Фамилия -->
+            <TextView
+                android:id="@+id/tvFullName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text=" "
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
 
-    <TextView
-        android:id="@+id/textView2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Настройки"
-        android:layout_marginStart="20dp"
-        android:layout_marginTop="23dp"
-        android:layout_marginBottom="10dp"
-        android:textColorLink="#000000"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/constraintLayout2"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/constraintLayout" />
+            <!-- Группа -->
+            <TextView
+                android:id="@+id/tvGroup"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text=" "
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/tvFullName" />
 
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/constraintLayout2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginTop="40dp"
-        android:layout_marginEnd="20dp"
-        android:background="@drawable/rounded_background"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/constraintLayout">
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
+
+        <!-- ******************** БЛОК "Настройки" ******************** -->
         <TextView
-            android:id="@+id/textView3"
+            android:id="@+id/labelSettings"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="7dp"
-            android:layout_marginTop="11dp"
-            android:text="Оповещение перед началом пары за:"
-            android:textSize="16dp"
-            android:textColor="@color/white"
-            app:layout_constraintEnd_toStartOf="@+id/editText"
-            app:layout_constraintHorizontal_bias="0.021"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="24dp"
+            android:text="Настройки"
+            android:textSize="20sp"
+            android:textStyle="bold"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toBottomOf="@id/blockProfile" />
 
-        <AutoCompleteTextView
-            android:id="@+id/editText"
-            android:layout_width="31dp"
-            android:layout_height="35dp"
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/blockSettings"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
             android:layout_marginTop="8dp"
-            android:layout_marginEnd="44dp"
-            android:text="30"
-            android:textColor="@color/white"
+            android:layout_marginEnd="20dp"
+            android:background="@drawable/rounded_background"
+            android:padding="12dp"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/labelSettings">
 
+            <!-- 1. Напоминание о начале занятий -->
+            <TextView
+                android:id="@+id/tvReminderStart"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Напоминание о начале занятий"
+                android:textSize="16sp"
+                android:textColor="@color/white"
+                app:layout_constraintEnd_toStartOf="@id/switchNotifications"
+                app:layout_constraintHorizontal_bias="0.0"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <Switch
+                android:id="@+id/switchNotifications"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:layout_constraintBaseline_toBaselineOf="@id/tvReminderStart"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+            <!-- 2. Оповещение перед началом пары за [ _ ] мин -->
+            <TextView
+                android:id="@+id/tvNotifyBefore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textColor="@color/white"
+                android:text="Оповещение перед началом пары за:"
+                android:textSize="16sp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/tvReminderStart" />
+
+            <EditText
+                android:id="@+id/editMinutes"
+                android:layout_width="40dp"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:textColor="@color/white"
+                android:maxLines="1"
+                app:layout_constraintBaseline_toBaselineOf="@id/tvNotifyBefore"
+                app:layout_constraintStart_toEndOf="@id/tvNotifyBefore" />
+
+            <TextView
+                android:id="@+id/tvMinutesLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="мин"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                app:layout_constraintBaseline_toBaselineOf="@id/tvNotifyBefore"
+                app:layout_constraintStart_toEndOf="@id/editMinutes" />
+
+            <!-- 3. Перевести в оффлайн режим -->
+            <TextView
+                android:id="@+id/tvOfflineMode"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textColor="@color/white"
+                android:text="Перевести в оффлайн режим"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toStartOf="@id/switchOfflineMode"
+                app:layout_constraintHorizontal_bias="0.0"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/tvNotifyBefore" />
+
+            <Switch
+                android:id="@+id/switchOfflineMode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:layout_constraintBaseline_toBaselineOf="@id/tvOfflineMode"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+            <!-- 4. Уведомление о смене расписания -->
+            <TextView
+                android:id="@+id/tvScheduleChange"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="8dp"
+                android:textColor="@color/white"
+                android:text="Уведомление о смене расписания"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toStartOf="@id/switchReminders"
+                app:layout_constraintHorizontal_bias="0.0"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/tvOfflineMode" />
+
+            <Switch
+                android:id="@+id/switchReminders"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:layout_constraintBaseline_toBaselineOf="@id/tvScheduleChange"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+        <!-- ******************** БЛОК "Полезные ссылки" ******************** -->
         <TextView
-            android:id="@+id/textView9"
+            android:id="@+id/labelLinks"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:text="мин"
-            android:textColor="@color/white"
-            android:textSize="16dp"
-            app:layout_constraintBaseline_toBaselineOf="@+id/textView3"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="24dp"
+            android:text="Полезные ссылки"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/blockSettings" />
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/blockLinks"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="20dp"
+            android:background="@drawable/rounded_background"
+            android:padding="12dp"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toEndOf="@+id/editText" />
-
-        <TextView
-            android:id="@+id/textView6"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="7dp"
-            android:layout_marginTop="12dp"
-            android:text="Перевести в оффлайн режим"
-            android:textSize="20dp"
-            android:textColor="@color/white"
-
-            app:layout_constraintEnd_toStartOf="@+id/switch1"
-            app:layout_constraintHorizontal_bias="0.45"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/textView3" />
+            app:layout_constraintTop_toBottomOf="@id/labelLinks">
 
+            <!-- Ссылка 1 -->
+            <TextView
+                android:id="@+id/linkVkGroup"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:autoLink="web"
+                android:text="Группа колледжа в ВК"
+                android:textColor="#0000EE"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <!-- Ссылка 2 -->
+            <TextView
+                android:id="@+id/linkStudentOffice"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:autoLink="web"
+                android:text="Личный кабинет студента колледжа ВятГУ"
+                android:textColor="#0000EE"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/linkVkGroup" />
+
+            <!-- Ссылка 3 -->
+            <TextView
+                android:id="@+id/linkVyatGU"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:autoLink="web"
+                android:text="Сайт ВятГУ"
+                android:textColor="#0000EE"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/linkStudentOffice" />
+
+            <!-- Ссылка 4 -->
+            <TextView
+                android:id="@+id/linkMoodle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:autoLink="web"
+                android:text="Moodle"
+                android:textColor="#0000EE"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/linkVyatGU" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+        <!-- ******************** БЛОК "Обратная связь" ******************** -->
         <TextView
-            android:id="@+id/textView8"
+            android:id="@+id/labelFeedback"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="7dp"
-            android:layout_marginTop="15dp"
-            android:layout_marginBottom="17dp"
-            android:text="Уведомление о смене расписания"
-            android:textSize="18dp"
-            android:textColor="@color/white"
-
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/switch2"
-            app:layout_constraintHorizontal_bias="1.0"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="24dp"
+            android:text="Обратная связь"
+            android:textSize="20sp"
+            android:textStyle="bold"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/textView6" />
+            app:layout_constraintTop_toBottomOf="@id/blockLinks" />
 
-        <Switch
-            android:id="@+id/switch1"
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/blockFeedback"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="20dp"
+            android:background="@drawable/rounded_background"
+            android:padding="12dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/labelFeedback">
+
+            <!-- Email -->
+            <TextView
+                android:id="@+id/tvEmail"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="email: plombika17@gmail.com"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <!-- VK -->
+            <TextView
+                android:id="@+id/tvVk"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="VK: @Plombirka171"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/tvEmail" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+        <Button
+            android:id="@+id/btnLogout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="19dp"
-            app:layout_constraintBaseline_toBaselineOf="@+id/textView6"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="24dp"
+            android:text="Выйти из аккаунта"
+            android:textSize="16sp"
+            android:backgroundTint="@color/design_default_color_error"
+            app:layout_constraintTop_toBottomOf="@id/blockFeedback"
+            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
-
-        <Switch
-            android:id="@+id/switch2"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="19dp"
-            app:layout_constraintBaseline_toBaselineOf="@+id/textView8"
-            app:layout_constraintEnd_toEndOf="parent" />
-
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

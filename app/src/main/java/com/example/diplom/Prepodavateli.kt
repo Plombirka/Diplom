@@ -9,22 +9,29 @@ import android.os.Environment
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
-import android.widget.Button
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
+import android.widget.Button
+import android.widget.ProgressBar
 import android.widget.TextView
-import kotlinx.coroutines.*
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.logging.HttpLoggingInterceptor
-import okhttp3.ConnectionSpec
 import org.apache.poi.ss.util.CellRangeAddress
 import org.apache.poi.xssf.usermodel.XSSFSheet
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -33,14 +40,17 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-import android.widget.ProgressBar
-import androidx.fragment.app.Fragment
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import okhttp3.internal.ignoreIoExceptions
 
 class Prepodavateli : Fragment() {
+
+    private lateinit var keywordInput: AutoCompleteTextView
+    private lateinit var searchWeek: Button
+    private lateinit var searchDay: Button
+    private lateinit var searchTomorow: Button
+    private lateinit var statusTextView: TextView
+    private lateinit var progressBar: ProgressBar
+    private lateinit var recyclerViewSchedule: RecyclerView // Объявление RecyclerView
+    private lateinit var scheduleAdapter: ScheduleAdapterPrepod // Объявление адаптера
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -55,110 +65,123 @@ class Prepodavateli : Fragment() {
 
         checkPermissions()
 
-        val keywordInput = view.findViewById<AutoCompleteTextView>(R.id.keywordInput)
-        val searchWeek = view.findViewById<Button>(R.id.searchWeek)
-        val searchDay = view.findViewById<Button>(R.id.searchDay)
-        val searchTomorow = view.findViewById<Button>(R.id.searchTomorow)
-        val resultTextView = view.findViewById<TextView>(R.id.resultTextView)
-        val statusTextView = view.findViewById<TextView>(R.id.statusTextView)
-        val progressBar = view.findViewById<ProgressBar>(R.id.progressBar)
+        keywordInput = view.findViewById(R.id.keywordInput)
+        searchWeek = view.findViewById(R.id.searchWeek)
+        searchDay = view.findViewById(R.id.searchDay)
+        searchTomorow = view.findViewById(R.id.searchTomorow)
+        statusTextView = view.findViewById(R.id.statusTextView)
+        progressBar = view.findViewById(R.id.progressBar)
+        recyclerViewSchedule = view.findViewById(R.id.recyclerViewSchedule) // Инициализация RecyclerView
+
+        // Настройка RecyclerView
+        scheduleAdapter = ScheduleAdapterPrepod()
+        recyclerViewSchedule.apply {
+            layoutManager = LinearLayoutManager(context)
+            adapter = scheduleAdapter
+        }
 
         searchDay.setOnClickListener {
-            if (resultTextView.text != " "){
-                resultTextView.text = " "
-            }
-            statusTextView.visibility=View.VISIBLE
-            progressBar.visibility=View.VISIBLE
-            statusTextView.text="Идёт поиск, подождите..."
-            val keyword = keywordInput.text.toString()
-            if (keyword.isNotEmpty()){
-                CoroutineScope(Dispatchers.Main).launch {
-                    val filePath = withContext(Dispatchers.IO){
-                        downloadExcelFile("http://212.109.221.255/files/Raspisanie.xlsx")
-                    }
-                    if (filePath != null) {
-                        val result = withContext(Dispatchers.IO) {
-                            searchInExcelDay(filePath, keyword)
-                        }
-                        statusTextView.visibility=View.GONE
-                        progressBar.visibility=View.GONE
-                        resultTextView.text = result
-                    } else{
-                        resultTextView.text = "Ошибка при загрузке файла"
-                        statusTextView.visibility=View.GONE
-                        progressBar.visibility=View.GONE
-                    }
-                }
-            } else{
-                resultTextView.text = "Введите ключевое слово"
-                statusTextView.visibility=View.GONE
-                progressBar.visibility=View.GONE
-            }
-        }
-
-        searchTomorow.setOnClickListener {
-            if (resultTextView.text != " "){
-                resultTextView.text = " "
-            }
-            statusTextView.visibility=View.VISIBLE
-            progressBar.visibility=View.VISIBLE
-            statusTextView.text="Идёт поиск, подождите..."
-            val keyword = keywordInput.text.toString()
-            if (keyword.isNotEmpty()){
-                CoroutineScope(Dispatchers.Main).launch {
-                    val filePath = withContext(Dispatchers.IO){
-                        downloadExcelFile("http://212.109.221.255/files/Raspisanie.xlsx")
-                    }
-                    if (filePath != null) {
-                        val result = withContext(Dispatchers.IO) {
-                            searchInExcelTomorow(filePath, keyword)
-                        }
-                        statusTextView.visibility=View.GONE
-                        progressBar.visibility=View.GONE
-                        resultTextView.text = result
-                    } else{
-                        resultTextView.text = "Ошибка при загрузке файла"
-                        statusTextView.visibility=View.GONE
-                        progressBar.visibility=View.GONE
-                    }
-                }
-            } else{
-                resultTextView.text = "Введите ключевое слово"
-                statusTextView.visibility=View.GONE
-                progressBar.visibility=View.GONE
-            }
-        }
-        searchWeek.setOnClickListener {
-            if (resultTextView.text != " "){
-                resultTextView.text = " "
-            }
-            statusTextView.visibility=View.VISIBLE
-            progressBar.visibility=View.VISIBLE
-            statusTextView.text="Идёт поиск, подождите..."
-            val keyword = keywordInput.text.toString()
+            scheduleAdapter.submitList(emptyList()) // Очищаем RecyclerView
+            statusTextView.visibility = View.VISIBLE
+            progressBar.visibility = View.VISIBLE
+            statusTextView.text = "Идёт поиск, подождите..."
+            val keyword = keywordInput.text.toString().trim()
             if (keyword.isNotEmpty()) {
-                // Запуск асинхронного процесса загрузки и обработки Excel файла
                 CoroutineScope(Dispatchers.Main).launch {
                     val filePath = withContext(Dispatchers.IO) {
                         downloadExcelFile("http://212.109.221.255/files/Raspisanie.xlsx")
                     }
                     if (filePath != null) {
-                        val result = withContext(Dispatchers.IO) {
-                            searchInExcel(filePath, keyword)
+                        val scheduleItems = withContext(Dispatchers.IO) {
+                            searchInExcelDay(filePath, keyword)
                         }
                         statusTextView.visibility = View.GONE
-                        progressBar.visibility=View.GONE
-                        resultTextView.text = result
-                    } else{
-                        resultTextView.text = "Ошибка при загрузке файла"
+                        progressBar.visibility = View.GONE
+                        if (scheduleItems.isEmpty()) {
+                            scheduleAdapter.submitList(listOf(ScheduleListItemPrepod.EmptyState))
+                        } else {
+                            scheduleAdapter.submitList(scheduleItems)
+                        }
+                    } else {
                         statusTextView.visibility = View.GONE
-                        progressBar.visibility=View.GONE
+                        progressBar.visibility = View.GONE
+                        scheduleAdapter.submitList(listOf(ScheduleListItemPrepod.SpecialNoteItem("Ошибка при загрузке файла расписания.")))
                     }
                 }
             } else {
-                resultTextView.text = "Введите ключевое слово!"
                 statusTextView.visibility = View.GONE
-                progressBar.visibility=View.GONE
+                progressBar.visibility = View.GONE
+                scheduleAdapter.submitList(listOf(ScheduleListItemPrepod.SpecialNoteItem("Введите ФИО преподавателя для поиска.")))
+            }
+        }
+
+        searchTomorow.setOnClickListener {
+            scheduleAdapter.submitList(emptyList())
+            statusTextView.visibility = View.VISIBLE
+            progressBar.visibility = View.VISIBLE
+            statusTextView.text = "Идёт поиск, подождите..."
+            val keyword = keywordInput.text.toString().trim()
+            if (keyword.isNotEmpty()) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    val filePath = withContext(Dispatchers.IO) {
+                        downloadExcelFile("http://212.109.221.255/files/Raspisanie.xlsx")
+                    }
+                    if (filePath != null) {
+                        val scheduleItems = withContext(Dispatchers.IO) {
+                            searchInExcelTomorow(filePath, keyword)
+                        }
+                        statusTextView.visibility = View.GONE
+                        progressBar.visibility = View.GONE
+                        if (scheduleItems.isEmpty()) {
+                            scheduleAdapter.submitList(listOf(ScheduleListItemPrepod.EmptyState))
+                        } else {
+                            scheduleAdapter.submitList(scheduleItems)
+                        }
+                    } else {
+                        statusTextView.visibility = View.GONE
+                        progressBar.visibility = View.GONE
+                        scheduleAdapter.submitList(listOf(ScheduleListItemPrepod.SpecialNoteItem("Ошибка при загрузке файла расписания.")))
+                    }
+                }
+            } else {
+                statusTextView.visibility = View.GONE
+                progressBar.visibility = View.GONE
+                scheduleAdapter.submitList(listOf(ScheduleListItemPrepod.SpecialNoteItem("Введите ФИО преподавателя для поиска.")))
+            }
+        }
+
+        searchWeek.setOnClickListener {
+            scheduleAdapter.submitList(emptyList())
+            statusTextView.visibility = View.VISIBLE
+            progressBar.visibility = View.VISIBLE
+            statusTextView.text = "Идёт поиск, подождите..."
+            val keyword = keywordInput.text.toString().trim()
+            if (keyword.isNotEmpty()) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    val filePath = withContext(Dispatchers.IO) {
+                        downloadExcelFile("http://212.109.221.255/files/Raspisanie.xlsx")
+                    }
+                    if (filePath != null) {
+                        val scheduleItems = withContext(Dispatchers.IO) {
+                            searchInExcel(filePath, keyword)
+                        }
+                        statusTextView.visibility = View.GONE
+                        progressBar.visibility = View.GONE
+                        if (scheduleItems.isEmpty()) {
+                            scheduleAdapter.submitList(listOf(ScheduleListItemPrepod.EmptyState))
+                        } else {
+                            scheduleAdapter.submitList(scheduleItems)
+                        }
+                    } else {
+                        statusTextView.visibility = View.GONE
+                        progressBar.visibility = View.GONE
+                        scheduleAdapter.submitList(listOf(ScheduleListItemPrepod.SpecialNoteItem("Ошибка при загрузке файла расписания.")))
+                    }
+                }
+            } else {
+                statusTextView.visibility = View.GONE
+                progressBar.visibility = View.GONE
+                scheduleAdapter.submitList(listOf(ScheduleListItemPrepod.SpecialNoteItem("Введите ФИО преподавателя для поиска.")))
             }
         }
     }
@@ -177,7 +200,7 @@ class Prepodavateli : Fragment() {
                 inputStream?.close()
                 file.absolutePath
             } else {
-                Log.e("DownloadFile", "Ошибка загрузки файла: ${response.message}")
+                Log.e("DownloadFile", "Ошибка загрузки файла: ${response.code} ${response.message}")
                 null
             }
         } catch (e: Exception) {
@@ -186,383 +209,440 @@ class Prepodavateli : Fragment() {
         }
     }
 
-    private fun searchInExcelTomorow(filePath: String, keyword: String): String {
-        return try{
-            Log.d("ExcelSearch", "Чтение файла...")
+    // --- Методы поиска расписания (изменены для возврата List<ScheduleListItem>) ---
+
+    private fun searchInExcelTomorow(filePath: String, keyword: String): List<ScheduleListItemPrepod> {
+        val scheduleItems = mutableListOf<ScheduleListItemPrepod>()
+        try {
+            Log.d("ExcelSearch", "Чтение файла для завтрашнего дня (ключ: $keyword)...")
             val fileInputStream = FileInputStream(filePath)
-            val workbook = XSSFWorkbook(fileInputStream)
-            val sheet = workbook.getSheetAt(0)
+            XSSFWorkbook(fileInputStream).use { workbook ->
+                val sheet = workbook.getSheetAt(0)
+                var found = false
+                var index = false
+                var keywordRowIndex = -1
+                var keywordColumnIndex = -1
 
-            val result = StringBuilder()
-            var found = false
-            var keywordRowIndex = -1
-            var keywordColumnIndex = -1
-            var totalRowCount = 0
-
-            // Находим ключевое слово
-            for (row in sheet) {
-                for (cell in row) {
-                    if (cell.toString().contains(keyword, ignoreCase = true)) {
-                        keywordRowIndex = row.rowNum
-                        keywordColumnIndex = cell.columnIndex
-                        found = true
-                        break
-                    }
-                }
-                if (found) break
-            }
-
-            if (found) {
-                // Получаем завтрашнюю дату
-                val tomorrowDate = LocalDate.now().plusDays(1)
-                val dayOfWeek = tomorrowDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale("ru"))
-                val dateFormatter = DateTimeFormatter.ofPattern("dd.MM", Locale("ru"))
-                val formattedDate = tomorrowDate.format(dateFormatter)
-
-                // Создаем строку для сравнения в формате "ВТОРНИК 12.11"
-                val nextDay = "$dayOfWeek $formattedDate"
-                    .replace("\\s+".toRegex(), " ") // Убираем лишние пробелы
-                    .uppercase()
-
-                Log.d("ExcelSearch", "Завтрашний день: $nextDay")
-
-                var isNextDay = false // Флаг для отслеживания нужного дня
-                var currentDay = "" // Для отслеживания текущего дня
-
-                // Обрабатываем объединённые ячейки
-                val mergedRegions = sheet.mergedRegions
-
-                for (i in (keywordRowIndex + 2) until sheet.physicalNumberOfRows) {
-                    val row = sheet.getRow(i) ?: continue
-
-                    // Получаем ячейки
-                    val dayCell = getMergedCellValue(sheet, mergedRegions, i, 6) // Столбец G
-                    val timeCell = getMergedCellValue(sheet, mergedRegions, i, 7) // Столбец H
-
-                    // Проверяем, является ли строка новой датой
-                    if (dayCell != null && dayCell.toString().isNotEmpty()) {
-                        // Приводим день из Excel к такому же формату, как и завтрашняя дата
-                        val dayFromExcel = dayCell.toString()
-                            .replace("\\s+".toRegex(), " ") // Убираем лишние пробелы
-                            .uppercase()
-                            .trim()
-
-                        // Проверяем, совпадает ли день в Excel с завтрашним днём
-                        if (dayFromExcel == nextDay) {
-                            isNextDay = true
-                        } else {
-                            isNextDay = false
-                        }
-                    }
-
-                    if (isNextDay) {
+                val headerRowIndex = 23
+                val headerRow = sheet.getRow(headerRowIndex)
+                if (headerRow != null) {
+                    for (row in sheet) {
                         for (cell in row) {
-                            if (cell.toString().contains(keyword, ignoreCase = true)) {
+                            if (cell.toString().trim().contains(keyword, ignoreCase = true)) {
+                                keywordRowIndex = row.rowNum
                                 keywordColumnIndex = cell.columnIndex
+                                found = true
+                                Log.d(
+                                    "ExcelSearch",
+                                    "Преподаватель '$keyword' найден в столбце $keywordColumnIndex"
+                                )
                                 break
                             }
                         }
-                        val groupCell = getMergedCellValue(sheet, mergedRegions, 23, keywordColumnIndex)
-                        val disciplineCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex).split("\n").map { it.trim() }
-                        val audienceCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex + 1).split("\n").map { it.trim() }
-
-                        // Поиск преподавателя с учетом ключевого слова
-                        val matchedDiscipline =
-                            disciplineCell.find { it.contains(keyword, ignoreCase = true) }
-                                .orEmpty()
-
-                        // Найти соответствующую аудиторию
-                        val matchedAudience = if (matchedDiscipline.isNotEmpty()) {
-                            // Найти индекс преподавателя
-                            val index = disciplineCell.indexOf(matchedDiscipline)
-                            // Получить аудиторию по индексу, если она существует
-                            if (index in audienceCell.indices) audienceCell[index] else "Не указано"
-                        } else {
-                            "Не указано" // Если преподаватель не найден, аудитория пустая
-                        }
-                        val groupList = groupCell.replace("Группа", "").trim()
-                        if (matchedDiscipline.contains(keyword, ignoreCase = true)) {
-                            if (timeCell.isNotBlank() && matchedDiscipline.isNotBlank()) {
-                                // Если день изменился, добавляем заголовок дня
-                                if (dayCell.isNotBlank() && dayCell != currentDay) {
-                                    result.append("\n=== $dayCell ===\n")
-                                    currentDay = dayCell
-                                }
-
-                                if (matchedDiscipline.isNotEmpty()) {
-                                    result.append("$timeCell | $matchedDiscipline | $matchedAudience | $groupList\n")
-                                } else {
-                                    Log.d(
-                                        "ExcelDebug",
-                                        "Ключевое слово '$keyword' не найдено в строке $i."
-                                    )
-                                }
-
-                                if (totalRowCount % 7 == 0) {
-                                    result.append("\n")
-                                }
-
-                            }
-                        }
+                        if (found) break
                     }
                 }
-            }
 
-            Log.d("ExcelSearch", "Поиск завершён.")
-            if (result.isEmpty()) "Ничего не найдено" else result.toString()
-        } catch (e: Exception) {
-            Log.e("ExcelSearch", "Ошибка при чтении файла", e)
-            "Ошибка при чтении файла: ${e.message}"
-        }
-    }
+                if (found) {
+                    val tomorrowDate = LocalDate.now().plusDays(1)
+                    val dayOfWeek = tomorrowDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale("ru"))
+                    val dateFormatter = DateTimeFormatter.ofPattern("dd.MM", Locale("ru"))
+                    val formattedDate = tomorrowDate.format(dateFormatter)
+                    val targetDayString = "$dayOfWeek $formattedDate".replace("\\s+".toRegex(), " ").uppercase()
+                    Log.d("ExcelSearch", "Искомый день (завтра): $targetDayString")
 
-    private fun searchInExcel(filePath: String, keyword: String): String {
-        return try {
-            Log.d("ExcelSearch", "Чтение файла...")
-            val fileInputStream = FileInputStream(filePath)
-            val workbook = XSSFWorkbook(fileInputStream)
-            val sheet = workbook.getSheetAt(0)
+                    var isTargetDay = false
+                    var dayHeaderAdded = false
 
-            val result = StringBuilder()
-            var found = false
-            var keywordRowIndex = -1
-            var keywordColumnIndex = -1
-            var totalRowCount = 0
-
-            for (row in sheet) {
-                for (cell in row) {
-                    if (cell.toString().contains(keyword, ignoreCase = true)) {
-                        keywordRowIndex = row.rowNum
-                        keywordColumnIndex = cell.columnIndex
-                        found = true
-                        break
-                    }
-                }
-                if (found) break
-            }
-
-            if (found) {
-                var currentDay = "" // Для отслеживания текущего дня
-
-                val mergedRegions = sheet.mergedRegions
-
-                for (i in (keywordRowIndex) until sheet.physicalNumberOfRows) {
-                    val row = sheet.getRow(i) ?: continue
-                    for (cell in row) {
-                        if (cell.toString().contains(keyword, ignoreCase = true)) {
-                            keywordColumnIndex = cell.columnIndex
-                            break
-                        }
-                    }
-                    val dayCell = getMergedCellValue(sheet, mergedRegions, i, 6) // Столбец G
-                    val timeCell = getMergedCellValue(sheet, mergedRegions, i, 7) // Столбец H
-                    val groupCell = getMergedCellValue(sheet, mergedRegions, 23, keywordColumnIndex)
-                    val disciplineCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex).split("\n").map { it.trim() }
-                    val audienceCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex + 1).split("\n").map { it.trim() }
-
-                    // Поиск преподавателя с учетом ключевого слова
-                    val matchedDiscipline = disciplineCell.find { it.contains(keyword, ignoreCase = true) }.orEmpty()
-
-                    // Найти соответствующую аудиторию
-                    val matchedAudience = if (matchedDiscipline.isNotEmpty()) {
-                        // Найти индекс преподавателя
-                        val index = disciplineCell.indexOf(matchedDiscipline)
-                        // Получить аудиторию по индексу, если она существует
-                        if (index in audienceCell.indices) audienceCell[index] else "Не указано"
-                    } else {
-                        "Не указано" // Если преподаватель не найден, аудитория пустая
-                    }
-                    val groupList = groupCell.replace("Группа","").trim()
-                    if (matchedDiscipline.contains(keyword, ignoreCase = true)) {
-                        if (timeCell.isNotBlank() && matchedDiscipline.isNotBlank()) {
-                            // Если день изменился, добавляем заголовок дня
-                            if (dayCell.isNotBlank() && dayCell != currentDay) {
-                                result.append("\n=== $dayCell ===\n")
-                                currentDay = dayCell
-                            }
-
-                            if (matchedDiscipline.isNotEmpty()) {
-                                result.append("$timeCell | $matchedDiscipline | $groupList | $matchedAudience\n")
+                    val mergedRegions = sheet.mergedRegions
+                    // Начинаем поиск пар ниже строки заголовков (например, с 24 строки)
+                    for (i in (headerRowIndex + 2) until sheet.physicalNumberOfRows) { // +2, чтобы начать после заголовков дней
+                        val row = sheet.getRow(i) ?: continue
+                        for (cell in row) {
+                            if (cell.toString().contains(keyword, ignoreCase = true)) {
+                                keywordColumnIndex = cell.columnIndex
+                                index = false
+                                break
                             } else {
-                                Log.d("ExcelDebug", "Ключевое слово '$keyword' не найдено в строке $i.")
+                                index = true
                             }
+                        }
+                        if (index){
+                            index = false
+                            continue
+                        }
+                        val dayCellRaw = getMergedCellValue(sheet, mergedRegions, i, 6) // Столбец G (дни недели)
 
-                            if (totalRowCount % 7 == 0) {
-                                result.append("\n")
+                        if (dayCellRaw.isNotBlank()) {
+                            val dayFromExcel = dayCellRaw.replace("\\s+".toRegex(), " ").uppercase().trim()
+                            if (dayFromExcel == targetDayString) {
+                                isTargetDay = true
+                                if (!dayHeaderAdded) {
+                                    scheduleItems.add(ScheduleListItemPrepod.DayHeader(dayCellRaw.trim()))
+                                    dayHeaderAdded = true
+                                    Log.d("ExcelSearch", "Добавлен заголовок дня: $dayCellRaw")
+                                }
+                            } else {
+                                if (isTargetDay) { // Если мы были на целевом дне и день сменился, прекращаем поиск
+                                    Log.d("ExcelSearch", "День сменился с $targetDayString на $dayFromExcel, завершаем поиск на завтра.")
+                                    break
+                                }
+                                isTargetDay = false
                             }
+                        }
 
+                        if (isTargetDay) {
+                            val timeCell = getMergedCellValue(sheet, mergedRegions, i, 7) // Столбец H (время)
+                            val disciplineCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex)
+                            // В вашем первом коде, typeCell (Пр. занятие/Лекция) был частью disciplineCell
+                            // teacherCell был в другом столбце (keywordColumnIndex + 1)
+                            // audienceCell был в keywordColumnIndex + 2
+                            // Но в вашем коде для групп, typeCell, teacherCell, audienceCell
+                            // были в соседних столбцах от группы.
+                            // Теперь, так как keywordColumnIndex - это столбец преподавателя,
+                            // аудитория, тип занятия и дисциплина будут находиться в других смещениях
+                            // относительно этого столбца.
+                            // **ВНИМАНИЕ:** Эти смещения (keywordColumnIndex + X) могут быть неверными
+                            // и требуют точной проверки структуры вашей Excel-таблицы.
+                            val actualDisciplineCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex) // Дисциплина (и тип занятия)
+                            val actualTeacherCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex + 1) // ФИО преподавателя (если в этом столбце)
+                            val actualAudienceCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex + 2) // Аудитория
+                            val actualGroupCell = getMergedCellValue(sheet, mergedRegions, 23, keywordColumnIndex) // Строка 23, столбец найденного преподавателя для группы
+
+                            // **Важно:** Логика извлечения данных из ячеек для преподавателя
+                            // отличается от логики для группы.
+                            // В Excel для преподавателей, дисциплина, аудитория, тип занятия и группа
+                            // могут быть расположены иначе относительно столбца преподавателя.
+                            // Вам нужно точно знать, какие столбцы соответствуют этим данным
+                            // относительно столбца, в котором находится ФИО преподавателя.
+
+                            // Пример адаптации:
+                            // Предположим, что:
+                            // - Время: столбец H (индекс 7)
+                            // - ФИО преподавателя: keyowrd (найдено в keywordColumnIndex)
+                            // - Дисциплина и Тип занятия: в столбце слева от преподавателя (keywordColumnIndex - 1)
+                            // - Аудитория: в столбце справа от преподавателя (keywordColumnIndex + 1)
+                            // - Группа: в строке 23 (индекс 22) и том же столбце, что и преподаватель
+
+                            val lessonDisciplineAndType = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex - 2) // Если дисциплина и тип занятия находятся в столбце преподавателя
+                            val actualAudience = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex + 1) // Если аудитория находится в столбце справа
+                            val groupName = getMergedCellValue(sheet, mergedRegions, 23, keywordColumnIndex).replace("Группа", "").trim()
+
+
+                            // Разделяем дисциплину и тип занятия
+                            val parts = lessonDisciplineAndType.split("\n").map { it.trim() }
+                            val discipline = parts.getOrElse(0) { "" }
+                            val type = parts.getOrElse(1) { "" } // Например, "Пр. занятие" или "Лекция"
+
+                            // Проверяем, что найденная дисциплина относится к текущему преподавателю (ключевому слову)
+                            // Если преподаватель найден в заголовке столбца, то все пары в этом столбце
+                            // относятся к этому преподавателю.
+                            if (timeCell.isNotBlank() && discipline.isNotBlank()) {
+                                Log.d("ExcelSearch", "Найдена запись: Время: $timeCell, Дисциплина: $discipline, Тип: $type, Преподаватель (ключ): $keyword, Аудитория: $actualAudience, Группа: $groupName")
+
+                                // Проверяем случай "день самостоятельной подготовки"
+                                if (discipline.equals(type, ignoreCase = true) && discipline.isNotBlank()) {
+                                    scheduleItems.add(ScheduleListItemPrepod.SpecialNoteItem(discipline))
+                                } else {
+                                    scheduleItems.add(ScheduleListItemPrepod.PairItem(
+                                        time = timeCell,
+                                        discipline = discipline,
+                                        type = type,
+                                        teacher = keyword, // Используем искомое ФИО преподавателя
+                                        audience = actualAudience.ifBlank { "—" },
+                                        group = groupName.ifBlank { "—" }
+                                    ))
+                                }
+                            }
                         }
                     }
+                } else {
+                    Log.d("ExcelSearch", "Преподаватель '$keyword' не найден в заголовках.")
                 }
             }
-
-            workbook.close()
-            Log.d("ExcelSearch", "Поиск завершён.")
-            if (result.isEmpty()) "Ничего не найдено" else result.toString()
+            Log.d("ExcelSearch", "Поиск на завтра завершён. Найдено элементов: ${scheduleItems.size}")
         } catch (e: Exception) {
-            Log.e("ExcelSearch", "Ошибка при чтении файла", e)
-            "Ошибка при чтении файла: ${e.message}"
+            Log.e("ExcelSearch", "Ошибка при чтении файла (завтра)", e)
+            scheduleItems.clear()
+            scheduleItems.add(ScheduleListItemPrepod.SpecialNoteItem("Ошибка при чтении файла расписания: ${e.message}"))
         }
+        return scheduleItems
     }
 
-    private fun searchInExcelDay(filePath: String, keyword: String): String {
-        return try{
-            Log.d("ExcelSearch", "Чтение файла...")
+    private fun searchInExcelDay(filePath: String, keyword: String): List<ScheduleListItemPrepod> {
+        val scheduleItems = mutableListOf<ScheduleListItemPrepod>()
+        try {
+            Log.d("ExcelSearch", "Чтение файла на текущий день (ключ: $keyword)...")
             val fileInputStream = FileInputStream(filePath)
-            val workbook = XSSFWorkbook(fileInputStream)
-            val sheet = workbook.getSheetAt(0)
+            XSSFWorkbook(fileInputStream).use { workbook ->
+                val sheet = workbook.getSheetAt(0)
+                var found = false
+                var index = false
+                var keywordRowIndex = -1
+                var keywordColumnIndex = -1
 
-            val result = StringBuilder()
-            var found = false
-            var keywordRowIndex = -1
-            var keywordColumnIndex = -1
-            var totalRowCount = 0
-
-            // Находим ключевое слово
-            for (row in sheet) {
-                for (cell in row) {
-                    if (cell.toString().contains(keyword, ignoreCase = true)) {
-                        keywordRowIndex = row.rowNum
-                        keywordColumnIndex = cell.columnIndex
-                        found = true
-                        break
-                    }
-                }
-                if (found) break
-            }
-
-            if (found) {
-                // Получаем текущую дату
-                val currentDate = LocalDate.now()
-                val dayOfWeek = currentDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale("ru"))
-                val dateFormatter = DateTimeFormatter.ofPattern("dd.MM", Locale("ru"))
-                val formattedDate = currentDate.format(dateFormatter)
-
-                // Создаем строку для сравнения в формате "ПОНЕДЕЛЬНИК 11.11"
-                val nowDay = "$dayOfWeek $formattedDate"
-                    .replace("\\s+".toRegex(), " ") // Убираем лишние пробелы
-                    .uppercase()
-
-                Log.d("ExcelSearch", "Текущий день: $nowDay")
-
-                var isCurrentDay = false // Флаг для отслеживания нужного дня
-                var currentDay = "" // Для отслеживания текущего дня
-
-                // Обрабатываем объединённые ячейки
-                val mergedRegions = sheet.mergedRegions
-
-                for (i in (keywordRowIndex + 2) until sheet.physicalNumberOfRows) {
-                    val row = sheet.getRow(i) ?: continue
-
-                    // Получаем ячейки
-                    val dayCell = getMergedCellValue(sheet, mergedRegions, i, 6) // Столбец G
-                    val timeCell = getMergedCellValue(sheet, mergedRegions, i, 7) // Столбец H
-
-                    if (dayCell != null && dayCell.toString().isNotEmpty()) {
-                        // Приводим день из Excel к такому же формату, как и текущая дата
-                        val dayFromExcel = dayCell.toString()
-                            .replace("\\s+".toRegex(), " ") // Убираем лишние пробелы
-                            .uppercase()
-                            .trim()
-
-                        // Проверяем, совпадает ли день в Excel с сегодняшним днем
-                        if (dayFromExcel == nowDay) {
-                            isCurrentDay = true
-                        } else {
-                            isCurrentDay = false
-                        }
-                    }
-
-                    if (isCurrentDay) {
+                val headerRowIndex = 23
+                val headerRow = sheet.getRow(headerRowIndex)
+                if (headerRow != null) {
+                    for (row in sheet) {
                         for (cell in row) {
-                            if (cell.toString().contains(keyword, ignoreCase = true)) {
+                            if (cell.toString().trim().contains(keyword, ignoreCase = true)) {
+                                keywordRowIndex = row.rowNum
                                 keywordColumnIndex = cell.columnIndex
+                                found = true
+                                Log.d(
+                                    "ExcelSearch",
+                                    "Преподаватель '$keyword' найден в столбце $keywordColumnIndex"
+                                )
                                 break
                             }
                         }
-                        val groupCell = getMergedCellValue(sheet, mergedRegions, 23, keywordColumnIndex)
-                        val disciplineCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex).split("\n").map { it.trim() }
-                        val audienceCell = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex + 1).split("\n").map { it.trim() }
+                        if (found) break
+                    }
+                }
 
-                        // Поиск преподавателя с учетом ключевого слова
-                        val matchedDiscipline = disciplineCell.find { it.contains(keyword, ignoreCase = true) }.orEmpty()
+                if (found) {
+                    val currentDate = LocalDate.now()
+                    val dayOfWeek = currentDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale("ru"))
+                    val dateFormatter = DateTimeFormatter.ofPattern("dd.MM", Locale("ru"))
+                    val formattedDate = currentDate.format(dateFormatter)
+                    val targetDayString = "$dayOfWeek $formattedDate".replace("\\s+".toRegex(), " ").uppercase()
+                    Log.d("ExcelSearch", "Искомый день (сегодня): $targetDayString")
 
-                        // Найти соответствующую аудиторию
-                        val matchedAudience = if (matchedDiscipline.isNotEmpty()) {
-                            // Найти индекс преподавателя
-                            val index = disciplineCell.indexOf(matchedDiscipline)
-                            // Получить аудиторию по индексу, если она существует
-                            if (index in audienceCell.indices) audienceCell[index] else "Не указано"
-                        } else {
-                            "Не указано" // Если преподаватель не найден, аудитория пустая
+                    var isTargetDay = false
+                    var dayHeaderAdded = false
+
+                    val mergedRegions = sheet.mergedRegions
+                    for (i in (headerRowIndex + 2) until sheet.physicalNumberOfRows) {
+                        val row = sheet.getRow(i) ?: continue
+                        for (cell in row) {
+                            if (cell.toString().contains(keyword, ignoreCase = true)) {
+                                keywordColumnIndex = cell.columnIndex
+                                index = false
+                                break
+                            } else {
+                                index = true
+                            }
                         }
-                        val groupList = groupCell.replace("Группа", "").trim()
-                        if (matchedDiscipline.contains(keyword, ignoreCase = true)) {
-                            if (timeCell.isNotBlank() && matchedDiscipline.isNotBlank()) {
-                                // Если день изменился, добавляем заголовок дня
-                                if (dayCell.isNotBlank() && dayCell != currentDay) {
-                                    result.append("\n=== $dayCell ===\n")
-                                    currentDay = dayCell
-                                }
+                        if (index){
+                            index = false
+                            continue
+                        }
+                        val dayCellRaw = getMergedCellValue(sheet, mergedRegions, i, 6)
 
-                                if (matchedDiscipline.isNotEmpty()) {
-                                    result.append("$timeCell | $matchedDiscipline | $groupList | $matchedAudience\n")
+                        if (dayCellRaw.isNotBlank()) {
+                            val dayFromExcel = dayCellRaw.replace("\\s+".toRegex(), " ").uppercase().trim()
+                            if (dayFromExcel == targetDayString) {
+                                isTargetDay = true
+                                if (!dayHeaderAdded) {
+                                    scheduleItems.add(ScheduleListItemPrepod.DayHeader(dayCellRaw.trim()))
+                                    dayHeaderAdded = true
+                                    Log.d("ExcelSearch", "Добавлен заголовок дня: $dayCellRaw")
+                                }
+                            } else {
+                                if (isTargetDay) {
+                                    Log.d("ExcelSearch", "День сменился с $targetDayString на $dayFromExcel, завершаем поиск на сегодня.")
+                                    break
+                                }
+                                isTargetDay = false
+                            }
+                        }
+
+                        if (isTargetDay) {
+                            val timeCell = getMergedCellValue(sheet, mergedRegions, i, 7)
+                            val lessonDisciplineAndType = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex - 2)
+                            val actualAudience = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex + 1)
+                            val groupName = getMergedCellValue(sheet, mergedRegions, 23, keywordColumnIndex).replace("Группа", "").trim()
+
+                            val parts = lessonDisciplineAndType.split("\n").map { it.trim() }
+                            val discipline = parts.getOrElse(0) { "" }
+                            val type = parts.getOrElse(1) { "" }
+
+                            if (timeCell.isNotBlank() && discipline.isNotBlank()) {
+                                Log.d("ExcelSearch", "Найдена запись: Время: $timeCell, Дисциплина: $discipline, Тип: $type, Преподаватель (ключ): $keyword, Аудитория: $actualAudience, Группа: $groupName")
+
+                                if (discipline.equals(type, ignoreCase = true) && discipline.isNotBlank()) {
+                                    scheduleItems.add(ScheduleListItemPrepod.SpecialNoteItem(discipline))
                                 } else {
-                                    Log.d(
-                                        "ExcelDebug",
-                                        "Ключевое слово '$keyword' не найдено в строке $i."
-                                    )
+                                    scheduleItems.add(ScheduleListItemPrepod.PairItem(
+                                        time = timeCell,
+                                        discipline = discipline,
+                                        type = type,
+                                        teacher = keyword,
+                                        audience = actualAudience.ifBlank { "—" },
+                                        group = groupName.ifBlank { "—" }
+                                    ))
                                 }
-
-                                if (totalRowCount % 7 == 0) {
-                                    result.append("\n")
-                                }
-
                             }
                         }
                     }
+                } else {
+                    Log.d("ExcelSearch", "Преподаватель '$keyword' не найден в заголовках.")
                 }
             }
-
-            Log.d("ExcelSearch", "Поиск завершён.")
-            if (result.isEmpty()) "Ничего не найдено" else result.toString()
+            Log.d("ExcelSearch", "Поиск на сегодня завершён. Найдено элементов: ${scheduleItems.size}")
         } catch (e: Exception) {
-            Log.e("ExcelSearch", "Ошибка при чтении файла", e)
-            "Ошибка при чтении файла: ${e.message}"
+            Log.e("ExcelSearch", "Ошибка при чтении файла (сегодня)", e)
+            scheduleItems.clear()
+            scheduleItems.add(ScheduleListItemPrepod.SpecialNoteItem("Ошибка при чтении файла расписания: ${e.message}"))
         }
+        return scheduleItems
     }
+
+    private fun searchInExcel(filePath: String, keyword: String): List<ScheduleListItemPrepod> {
+        val scheduleItems = mutableListOf<ScheduleListItemPrepod>()
+        try {
+            Log.d("ExcelSearch", "Чтение файла (вся неделя, ключ: $keyword)...")
+            val fileInputStream = FileInputStream(filePath)
+            XSSFWorkbook(fileInputStream).use { workbook ->
+                val sheet = workbook.getSheetAt(0)
+                var found = false
+                var index = false
+                var keywordRowIndex = -1
+                var keywordColumnIndex = -1
+
+                val headerRowIndex = 23
+                val headerRow = sheet.getRow(headerRowIndex)
+                if (headerRow != null) {
+                    for (row in sheet) {
+                        for (cell in row) {
+                            if (cell.toString().trim().contains(keyword, ignoreCase = true)) {
+                                keywordRowIndex = row.rowNum
+                                keywordColumnIndex = cell.columnIndex
+                                found = true
+                                Log.d(
+                                    "ExcelSearch",
+                                    "Преподаватель '$keyword' найден в столбце $keywordColumnIndex"
+                                )
+                                break
+                            }
+                        }
+                        if (found) break
+                    }
+                }
+
+                if (found) {
+                    var currentDayHeader = ""
+                    val mergedRegions = sheet.mergedRegions
+
+
+                    for (i in (headerRowIndex + 2) until sheet.physicalNumberOfRows) {
+                        val row = sheet.getRow(i) ?: continue
+                        for (cell in row) {
+                            if (cell.toString().contains(keyword, ignoreCase = true)) {
+                                keywordColumnIndex = cell.columnIndex
+                                index = false
+                                break
+                            } else {
+                                index = true
+                            }
+                        }
+                        if (index){
+                            index = false
+                            continue
+                        }
+                        val dayCellRaw = getMergedCellValue(sheet, mergedRegions, i, 6) // Столбец G (дни недели)
+
+                        if (dayCellRaw.isNotBlank() && dayCellRaw != currentDayHeader) {
+                            scheduleItems.add(ScheduleListItemPrepod.DayHeader(dayCellRaw.trim()))
+                            currentDayHeader = dayCellRaw
+                            Log.d("ExcelSearch", "Добавлен заголовок дня: $dayCellRaw")
+                        }
+
+                        val timeCell = getMergedCellValue(sheet, mergedRegions, i, 7) // Столбец H (время)
+                        val lessonDisciplineAndType = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex-2)
+                        val actualAudience = getMergedCellValue(sheet, mergedRegions, i, keywordColumnIndex + 1)
+                        val groupName = getMergedCellValue(sheet, mergedRegions, 23, keywordColumnIndex).replace("Группа", "").trim()
+
+                        val parts = lessonDisciplineAndType.split("\n").map { it.trim() }
+                        val discipline = parts.getOrElse(0) { "" }
+                        val type = parts.getOrElse(1) { "" }
+
+                        if (timeCell.isNotBlank() && discipline.isNotBlank()) {
+                            Log.d("ExcelSearch", "Найдена запись: Время: $timeCell, Дисциплина: $discipline, Тип: $type, Преподаватель (ключ): $keyword, Аудитория: $actualAudience, Группа: $groupName")
+                            if (discipline.equals(type, ignoreCase = true) && discipline.isNotBlank()) {
+                                scheduleItems.add(ScheduleListItemPrepod.SpecialNoteItem(discipline))
+                            } else {
+                                scheduleItems.add(ScheduleListItemPrepod.PairItem(
+                                    time = timeCell,
+                                    discipline = discipline,
+                                    type = type,
+                                    teacher = keyword,
+                                    audience = actualAudience.ifBlank { "—" },
+                                    group = groupName.ifBlank { "—" }
+                                ))
+                            }
+                        }
+                    }
+                } else {
+                    Log.d("ExcelSearch", "Преподаватель '$keyword' не найден в заголовках.")
+                }
+            }
+            Log.d("ExcelSearch", "Поиск по неделе завершён. Найдено элементов: ${scheduleItems.size}")
+        } catch (e: Exception) {
+            Log.e("ExcelSearch", "Ошибка при чтении файла (неделя)", e)
+            scheduleItems.clear()
+            scheduleItems.add(ScheduleListItemPrepod.SpecialNoteItem("Ошибка при чтении файла расписания: ${e.message}"))
+        }
+        return scheduleItems
+    }
+
+    // --- Остальные вспомогательные методы (без изменений) ---
 
     private fun getMergedCellValue(sheet: XSSFSheet, mergedRegions: List<CellRangeAddress>, row: Int, col: Int): String {
         for (range in mergedRegions) {
             if (range.isInRange(row, col)) {
-                val mergedCell = sheet.getRow(range.firstRow).getCell(range.firstColumn)
-                return mergedCell?.toString() ?: ""
+                val firstRow = sheet.getRow(range.firstRow)
+                if (firstRow != null) {
+                    val mergedCell = firstRow.getCell(range.firstColumn)
+                    return mergedCell?.toString()?.trim() ?: ""
+                }
+                return ""
             }
         }
-        val cell = sheet.getRow(row)?.getCell(col)
-        return cell?.toString() ?: ""
+        val currentRow = sheet.getRow(row)
+        if (currentRow != null) {
+            val cell = currentRow.getCell(col)
+            return cell?.toString()?.trim() ?: ""
+        }
+        return ""
     }
 
-    private val client = createHttpClient()
+    private val client: OkHttpClient by lazy { createHttpClient() }
 
-    // Создание OkHttpClient для работы с HTTP, включая разрешение на cleartext трафик
     private fun createHttpClient(): OkHttpClient {
-        val loggingInterceptor = HttpLoggingInterceptor()
-        loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY)
-
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
         return OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor) // Логгирование запросов для отладки
-            .connectionSpecs(listOf(ConnectionSpec.CLEARTEXT, ConnectionSpec.COMPATIBLE_TLS)) // Разрешение на HTTP (cleartext)
+            .addInterceptor(loggingInterceptor)
+            .connectionSpecs(listOf(ConnectionSpec.CLEARTEXT, ConnectionSpec.MODERN_TLS, ConnectionSpec.COMPATIBLE_TLS))
             .build()
     }
 
     private fun checkPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
-                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                intent.data = Uri.parse("package:" + requireActivity().packageName)
-                startActivity(intent)
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.data = Uri.parse("package:" + requireActivity().packageName)
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Log.e("Permissions", "Не удалось запросить ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION", e)
+                }
             }
         }
+    }
+
+    private fun setupAutoCompleteTextView(suggestions: List<String>) {
+        val adapter = ArrayAdapter<String>(requireContext(), android.R.layout.simple_dropdown_item_1line, suggestions.toMutableList())
+        keywordInput.setAdapter(adapter)
+        keywordInput.threshold = 1
+
+        keywordInput.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {}
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
     }
 }
