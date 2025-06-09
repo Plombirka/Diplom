@@ -531,19 +531,9 @@ class Raspisanie : Fragment() {
 
         keywordInput.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
-                // Фильтрация уже встроена в ArrayAdapter, если список не слишком большой
-                // Для очень больших списков или кастомной логики можно использовать getFilter()
-                // adapter.filter.filter(s.toString())
-                // Но так как мы передаем полный список, AutoCompleteTextView сам фильтрует
             }
-
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
     }
-
-    // filterGroups больше не нужен, если используется стандартная фильтрация ArrayAdapter
-    // private fun filterGroups(query: String, groups: List<String>): List<String> {
-    // return groups.filter { it.lowercase().contains(query.lowercase()) }
-    // }
 }
