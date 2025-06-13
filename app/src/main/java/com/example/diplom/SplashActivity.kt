@@ -1,4 +1,3 @@
-// src/main/java/com/example/diplom/SplashActivity.kt
 package com.example.diplom
 
 import android.annotation.SuppressLint
@@ -19,7 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.suspendCancellableCoroutine // Добавлено для suspendUntilNewsLoadComplete
+import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -30,17 +29,20 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.ArrayList
-import kotlin.coroutines.resume // Добавлено для suspendUntilNewsLoadComplete
+import kotlin.coroutines.resume
 
 class SplashActivity : AppCompatActivity() {
+
+    private val PREFS_NAME = "MyAppPrefs"
+    private val KEY_OFFLINE_MODE_ENABLED = "offline_mode_enabled"
+    private val KEY_OFFLINE_FILE_PATH = "offline_file_path"
+    private val SCHEDULE_DOWNLOAD_URL = "http://212.109.221.255/files/Raspisanie.xlsx"
 
     private val client = createHttpClient()
     private lateinit var progressBar: ProgressBar
     private lateinit var statusTextView: TextView
     private lateinit var retryButton: Button
     private lateinit var loadingTextView: TextView
-
-    // !!! ИЗМЕНЕНО: теперь newsViewModel инициализируется из Application
     private lateinit var newsViewModel: NewsViewModel
 
     @SuppressLint("MissingInflatedId")
@@ -52,73 +54,94 @@ class SplashActivity : AppCompatActivity() {
         statusTextView = findViewById(R.id.statusTextView)
         retryButton = findViewById(R.id.retryButton)
         loadingTextView = findViewById(R.id.loadingText)
-
-        // !!! ИЗМЕНЕНО: Получаем NewsViewModel из Application класса
         newsViewModel = (application as MyApplication).getNewsViewModel()
 
         retryButton.setOnClickListener {
             loadingTextView.visibility = View.VISIBLE
-            retryLoading()
+            startLoading()
         }
 
-        retryLoading()
+        startLoading()
     }
 
     private fun createHttpClient(): OkHttpClient {
-        val loggingInterceptor = HttpLoggingInterceptor()
-        loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY)
-
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
-            .connectionSpecs(listOf(ConnectionSpec.CLEARTEXT, ConnectionSpec.COMPATIBLE_TLS))
+            .connectionSpecs(listOf(ConnectionSpec.CLEARTEXT, ConnectionSpec.MODERN_TLS, ConnectionSpec.COMPATIBLE_TLS))
             .build()
     }
 
-    private fun retryLoading() {
-        if (isInternetAvailable()) {
-            progressBar.visibility = View.VISIBLE
-            statusTextView.visibility = View.GONE
-            retryButton.visibility = View.GONE
-            loadingTextView.text = "Загрузка данных..."
+    private fun startLoading() {
+        progressBar.visibility = View.VISIBLE
+        statusTextView.visibility = View.GONE
+        retryButton.visibility = View.GONE
+        loadingTextView.text = "Загрузка данных..."
 
-            lifecycleScope.launch {
-                try {
-                    val excelDeferred = async { loadData() } // Загрузка групп из Excel
+        lifecycleScope.launch {
+            val groupsDeferred = async { loadGroupsData() }
 
-                    // Запускаем загрузку новостей только если они еще не загружены и не грузятся
-                    if (newsViewModel.posts.value.isNullOrEmpty() && newsViewModel.isLoading.value == false) {
-                        Log.d("SplashActivity", "Starting newsViewModel.refreshPosts() for initial load.")
-                        newsViewModel.refreshPosts()
-                    } else {
-                        Log.d("SplashActivity", "News already loaded or loading, skipping refreshPosts() in SplashActivity.")
-                    }
-
-                    val groups = excelDeferred.await() // Ждем, пока Excel загрузится
-
-                    // Ждем, пока NewsViewModel закончит свою загрузку
-                    Log.d("SplashActivity", "Waiting for NewsViewModel to complete initial load...")
-                    suspendUntilNewsLoadComplete()
-                    Log.d("SplashActivity", "NewsViewModel initial load complete.")
-
-                    // Проверяем наличие ошибок после загрузки
-                    if (newsViewModel.errorMessage.value != null) {
-                        showError("Ошибка загрузки новостей: ${newsViewModel.errorMessage.value}")
-                    } else if (groups.isNotEmpty()) {
-                        navigateToMainActivity(groups)
-                    } else {
-                        showError("Ошибка загрузки данных Excel")
-                    }
-
-                } catch (e: Exception) {
-                    Log.e("SplashActivity", "Error during splash loading", e)
-                    showError("Ошибка при запуске: ${e.localizedMessage}")
+            if (isInternetAvailable()) {
+                Log.d("SplashActivity", "Internet available. Starting news load.")
+                if (newsViewModel.posts.value.isNullOrEmpty() && newsViewModel.isLoading.value == false) {
+                    newsViewModel.refreshPosts()
                 }
+                suspendUntilNewsLoadComplete()
+                Log.d("SplashActivity", "News loading procedure finished.")
+            } else {
+                Log.d("SplashActivity", "No internet. Skipping news load.")
             }
-        } else {
-            showError("Нет подключения к интернету")
+
+            val groups = groupsDeferred.await()
+
+            if (groups.isNotEmpty()) {
+                navigateToMainActivity(groups)
+            } else {
+                showError("Не удалось загрузить данные расписания. Проверьте подключение или настройки офлайн-режима.")
+            }
         }
     }
 
+    private suspend fun loadGroupsData(): List<String> {
+        return withContext(Dispatchers.IO) {
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val isOffline = prefs.getBoolean(KEY_OFFLINE_MODE_ENABLED, false)
+            val offlineFilePath = prefs.getString(KEY_OFFLINE_FILE_PATH, null)
+
+            if (isOffline && offlineFilePath != null && File(offlineFilePath).exists()) {
+                Log.d("SplashLoad", "Offline mode is ON. Using local file: $offlineFilePath")
+                return@withContext extractGroupsFromExcel(offlineFilePath)
+            }
+
+            if (isInternetAvailable()) {
+                Log.d("SplashLoad", "Offline mode is OFF or file not found. Downloading from internet.")
+                val downloadedFilePath = downloadExcelFile(SCHEDULE_DOWNLOAD_URL)
+                if (downloadedFilePath != null) {
+                    return@withContext extractGroupsFromExcel(downloadedFilePath)
+                }
+            }
+
+            Log.e("SplashLoad", "Failed to load groups data. No offline file and no internet.")
+            return@withContext emptyList()
+        }
+    }
+
+    private fun isInternetAvailable(): Boolean {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun showError(message: String) {
+        progressBar.visibility = View.GONE
+        statusTextView.visibility = View.VISIBLE
+        retryButton.visibility = View.VISIBLE
+        loadingTextView.visibility = View.GONE
+        statusTextView.text = message
+    }
     // Вспомогательная suspend-функция для ожидания завершения загрузки NewsViewModel
     private suspend fun suspendUntilNewsLoadComplete() = suspendCancellableCoroutine<Unit> { continuation ->
         val observer = object : androidx.lifecycle.Observer<Boolean> {
@@ -146,32 +169,6 @@ class SplashActivity : AppCompatActivity() {
         // Если корутина отменяется, удаляем наблюдателя, чтобы избежать утечек памяти
         continuation.invokeOnCancellation {
             newsViewModel.isLoading.removeObserver(observer)
-        }
-    }
-
-    private fun showError(message: String) {
-        progressBar.visibility = View.GONE
-        statusTextView.visibility = View.VISIBLE
-        retryButton.visibility = View.VISIBLE
-        loadingTextView.visibility = View.GONE
-        statusTextView.text = message
-    }
-
-    private fun isInternetAvailable(): Boolean {
-        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = connectivityManager.activeNetwork ?: return false
-        val networkCapabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-        return networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-    }
-
-    private suspend fun loadData(): List<String> {
-        return withContext(Dispatchers.IO) {
-            val filePath = downloadExcelFile("http://212.109.221.255/files/Raspisanie.xlsx")
-            if (filePath != null) {
-                extractGroupsFromExcel(filePath)
-            } else {
-                emptyList()
-            }
         }
     }
 

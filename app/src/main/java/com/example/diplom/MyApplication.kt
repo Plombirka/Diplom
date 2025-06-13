@@ -6,45 +6,68 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.work.*
 import com.example.diplom.viewmodels.NewsViewModel
+import java.time.LocalDateTime
+import java.time.Duration
 
-// 1. MyApplication должен реализовывать ViewModelStoreOwner
 class MyApplication : Application(), ViewModelStoreOwner {
 
-    // 2. Создаем ViewModelStore
     private lateinit var appViewModelStore: ViewModelStore
-
-    // 3. Создаем переменную для NewsViewModel
     private lateinit var newsViewModel: NewsViewModel
 
     override fun onCreate() {
         super.onCreate()
-        // 4. Инициализируем ViewModelStore
+        // Инициализация ViewModelStore
         appViewModelStore = ViewModelStore()
 
-        // 5. Создаем кастомную фабрику для NewsViewModel
-        // Эта фабрика знает, как передать 'application' в конструктор NewsViewModel
+        // Создание кастомной фабрики для NewsViewModel
         val factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 if (modelClass.isAssignableFrom(NewsViewModel::class.java)) {
                     @Suppress("UNCHECKED_CAST")
-                    return NewsViewModel(this@MyApplication) as T // Передаем ссылку на Application
+                    return NewsViewModel(this@MyApplication) as T
                 }
                 throw IllegalArgumentException("Unknown ViewModel class")
             }
         }
 
-        // 6. Инициализируем NewsViewModel, используя кастомную фабрику и наш ViewModelStore
-        // Это создаст NewsViewModel один раз для всего жизненного цикла приложения.
+        // Инициализация NewsViewModel
         newsViewModel = ViewModelProvider(this, factory).get(NewsViewModel::class.java)
+
+        // Планирование ежедневного Worker для напоминаний
+        scheduleDailyWorker()
     }
 
-    // 7. Предоставляем метод для получения NewsViewModel из MyApplication
+    // Метод для получения NewsViewModel
     fun getNewsViewModel(): NewsViewModel {
         return newsViewModel
     }
 
-    // 8. Переопределяем метод getViewModelStore() из ViewModelStoreOwner
+    // Реализация ViewModelStoreOwner
     override val viewModelStore: ViewModelStore
         get() = appViewModelStore
+
+    // Планирование ежедневного Worker
+    private fun scheduleDailyWorker() {
+        val dailyWorkRequest = PeriodicWorkRequestBuilder<ReminderSchedulerWorker>(
+            repeatInterval = 1,
+            repeatIntervalTimeUnit = java.util.concurrent.TimeUnit.DAYS
+        )
+            .setInitialDelay(calculateInitialDelay(), java.util.concurrent.TimeUnit.MILLISECONDS)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "reminder_scheduler",
+            ExistingPeriodicWorkPolicy.KEEP,
+            dailyWorkRequest
+        )
+    }
+
+    // Расчёт задержки до следующего запуска (00:01 следующего дня)
+    private fun calculateInitialDelay(): Long {
+        val now = LocalDateTime.now()
+        val nextRun = now.withHour(0).withMinute(1).withSecond(0).plusDays(1)
+        return Duration.between(now, nextRun).toMillis()
+    }
 }

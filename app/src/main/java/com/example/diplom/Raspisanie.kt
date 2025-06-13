@@ -1,12 +1,7 @@
 package com.example.diplom
 
-import android.annotation.SuppressLint
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
+import android.content.Context
 import android.os.Bundle
-import android.os.Environment
-import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
@@ -19,9 +14,9 @@ import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,6 +38,11 @@ import java.util.Locale
 
 class Raspisanie : Fragment() {
 
+    private val PREFS_NAME = "MyAppPrefs"
+    private val KEY_OFFLINE_MODE_ENABLED = "offline_mode_enabled"
+    private val KEY_OFFLINE_FILE_PATH = "offline_file_path"
+    private val SCHEDULE_DOWNLOAD_URL = "http://212.109.221.255/files/Raspisanie.xlsx"
+
     private lateinit var keywordInput: AutoCompleteTextView
     private lateinit var searchWeek: Button
     private lateinit var searchDay: Button
@@ -59,11 +59,8 @@ class Raspisanie : Fragment() {
         return inflater.inflate(R.layout.activity_raspisanie, container, false)
     }
 
-    @SuppressLint("MissingInflatedId")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        checkPermissions()
 
         keywordInput = view.findViewById(R.id.keywordInput)
         searchWeek = view.findViewById(R.id.searchWeek)
@@ -73,7 +70,6 @@ class Raspisanie : Fragment() {
         progressBar = view.findViewById(R.id.progressBar)
         recyclerViewSchedule = view.findViewById(R.id.recyclerViewSchedule)
 
-        // Настройка RecyclerView
         scheduleAdapter = ScheduleAdapter()
         recyclerViewSchedule.apply {
             layoutManager = LinearLayoutManager(context)
@@ -81,113 +77,63 @@ class Raspisanie : Fragment() {
         }
 
         val groups = requireActivity().intent.getStringArrayListExtra("groups_list")
-
         if (groups != null && groups.isNotEmpty()) {
             setupAutoCompleteTextView(groups)
         }
 
-        searchDay.setOnClickListener {
-            scheduleAdapter.submitList(emptyList()) // Очищаем RecyclerView
-            statusTextView.visibility = View.VISIBLE
-            progressBar.visibility = View.VISIBLE
-            statusTextView.text = "Идёт поиск, подождите..."
-            val keyword = keywordInput.text.toString().trim()
-            if (keyword.isNotEmpty()) {
-                CoroutineScope(Dispatchers.Main).launch {
-                    val filePath = withContext(Dispatchers.IO) {
-                        downloadExcelFile("http://212.109.221.255/files/Raspisanie.xlsx")
-                    }
-                    if (filePath != null) {
-                        val scheduleItems = withContext(Dispatchers.IO) {
-                            searchInExcelDay(filePath, keyword)
-                        }
-                        statusTextView.visibility = View.GONE
-                        progressBar.visibility = View.GONE
-                        if (scheduleItems.isEmpty()) {
-                            scheduleAdapter.submitList(listOf(ScheduleListItem.EmptyState))
-                        } else {
-                            scheduleAdapter.submitList(scheduleItems)
-                        }
-                    } else {
-                        statusTextView.visibility = View.GONE
-                        progressBar.visibility = View.GONE
-                        scheduleAdapter.submitList(listOf(ScheduleListItem.SpecialNoteItem("Ошибка при загрузке файла расписания.")))
-                    }
-                }
-            } else {
-                statusTextView.visibility = View.GONE
-                progressBar.visibility = View.GONE
-                scheduleAdapter.submitList(listOf(ScheduleListItem.SpecialNoteItem("Введите ключевое слово для поиска.")))
-            }
+        searchDay.setOnClickListener { performSearch(::searchInExcelDay) }
+        searchTomorow.setOnClickListener { performSearch(::searchInExcelTomorow) }
+        searchWeek.setOnClickListener { performSearch(::searchInExcel) }
+    }
+
+    private fun performSearch(searchFunction: suspend (filePath: String, keyword: String) -> List<ScheduleListItem>) {
+        val keyword = keywordInput.text.toString().trim()
+        if (keyword.isEmpty()) {
+            scheduleAdapter.submitList(listOf(ScheduleListItem.SpecialNoteItem("Введите ключевое слово для поиска.")))
+            return
         }
 
-        searchTomorow.setOnClickListener {
-            scheduleAdapter.submitList(emptyList())
-            statusTextView.visibility = View.VISIBLE
-            progressBar.visibility = View.VISIBLE
-            statusTextView.text = "Идёт поиск, подождите..."
-            val keyword = keywordInput.text.toString().trim()
-            if (keyword.isNotEmpty()) {
-                CoroutineScope(Dispatchers.Main).launch {
-                    val filePath = withContext(Dispatchers.IO) {
-                        downloadExcelFile("http://212.109.221.255/files/Raspisanie.xlsx")
-                    }
-                    if (filePath != null) {
-                        val scheduleItems = withContext(Dispatchers.IO) {
-                            searchInExcelTomorow(filePath, keyword)
-                        }
-                        statusTextView.visibility = View.GONE
-                        progressBar.visibility = View.GONE
-                        if (scheduleItems.isEmpty()) {
-                            scheduleAdapter.submitList(listOf(ScheduleListItem.EmptyState))
-                        } else {
-                            scheduleAdapter.submitList(scheduleItems)
-                        }
-                    } else {
-                        statusTextView.visibility = View.GONE
-                        progressBar.visibility = View.GONE
-                        scheduleAdapter.submitList(listOf(ScheduleListItem.SpecialNoteItem("Ошибка при загрузке файла расписания.")))
-                    }
+        scheduleAdapter.submitList(emptyList())
+        statusTextView.visibility = View.VISIBLE
+        progressBar.visibility = View.VISIBLE
+        statusTextView.text = "Идёт поиск, подождите..."
+
+        lifecycleScope.launch {
+            val filePath = withContext(Dispatchers.IO) { getScheduleFilePath() }
+            if (filePath != null) {
+                val scheduleItems = withContext(Dispatchers.IO) { searchFunction(filePath, keyword) }
+                statusTextView.visibility = View.GONE
+                progressBar.visibility = View.GONE
+                if (scheduleItems.isEmpty()) {
+                    scheduleAdapter.submitList(listOf(ScheduleListItem.EmptyState))
+                } else {
+                    scheduleAdapter.submitList(scheduleItems)
                 }
             } else {
                 statusTextView.visibility = View.GONE
                 progressBar.visibility = View.GONE
-                scheduleAdapter.submitList(listOf(ScheduleListItem.SpecialNoteItem("Введите ключевое слово для поиска.")))
+                scheduleAdapter.submitList(listOf(ScheduleListItem.SpecialNoteItem("Ошибка. Не удалось получить файл расписания.")))
             }
         }
-        searchWeek.setOnClickListener {
-            scheduleAdapter.submitList(emptyList())
-            statusTextView.visibility = View.VISIBLE
-            progressBar.visibility = View.VISIBLE
-            statusTextView.text = "Идёт поиск, подождите..."
-            val keyword = keywordInput.text.toString().trim()
-            if (keyword.isNotEmpty()) {
-                CoroutineScope(Dispatchers.Main).launch {
-                    val filePath = withContext(Dispatchers.IO) {
-                        downloadExcelFile("http://212.109.221.255/files/Raspisanie.xlsx")
-                    }
-                    if (filePath != null) {
-                        val scheduleItems = withContext(Dispatchers.IO) {
-                            searchInExcel(filePath, keyword)
-                        }
-                        statusTextView.visibility = View.GONE
-                        progressBar.visibility = View.GONE
-                        if (scheduleItems.isEmpty()) {
-                            scheduleAdapter.submitList(listOf(ScheduleListItem.EmptyState))
-                        } else {
-                            scheduleAdapter.submitList(scheduleItems)
-                        }
-                    } else {
-                        statusTextView.visibility = View.GONE
-                        progressBar.visibility = View.GONE
-                        scheduleAdapter.submitList(listOf(ScheduleListItem.SpecialNoteItem("Ошибка при загрузке файла расписания.")))
-                    }
-                }
+    }
+
+    private suspend fun getScheduleFilePath(): String? {
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isOffline = prefs.getBoolean(KEY_OFFLINE_MODE_ENABLED, false)
+
+        return if (isOffline) {
+            Log.d("ScheduleMode", "Работа в ОФЛАЙН-режиме.")
+            val filePath = prefs.getString(KEY_OFFLINE_FILE_PATH, null)
+            if (filePath != null && File(filePath).exists()) {
+                Log.d("ScheduleMode", "Используется локальный файл: $filePath")
+                filePath
             } else {
-                statusTextView.visibility = View.GONE
-                progressBar.visibility = View.GONE
-                scheduleAdapter.submitList(listOf(ScheduleListItem.SpecialNoteItem("Введите ключевое слово для поиска.")))
+                Log.e("ScheduleMode", "Офлайн-режим включен, но файл не найден по пути: $filePath")
+                null
             }
+        } else {
+            Log.d("ScheduleMode", "Работа в ОНЛАЙН-режиме. Скачивание файла...")
+            downloadExcelFile(SCHEDULE_DOWNLOAD_URL)
         }
     }
 
@@ -503,24 +449,6 @@ class Raspisanie : Fragment() {
             .addInterceptor(loggingInterceptor)
             .connectionSpecs(listOf(ConnectionSpec.CLEARTEXT, ConnectionSpec.MODERN_TLS, ConnectionSpec.COMPATIBLE_TLS)) // Добавлен MODERN_TLS
             .build()
-    }
-
-    private fun checkPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                try {
-                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.data = Uri.parse("package:" + requireActivity().packageName)
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e("Permissions", "Не удалось запросить ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION", e)
-                    // Можно показать диалог пользователю с инструкцией как дать разрешение вручную
-                }
-            }
-        }
-        // Для версий < R разрешения WRITE_EXTERNAL_STORAGE/READ_EXTERNAL_STORAGE
-        // должны запрашиваться через `requestPermissions()` и обрабатываться в `onRequestPermissionsResult()`.
-        // Текущий код не содержит этой логики, но для полноты картины это важно.
     }
 
     private fun setupAutoCompleteTextView(groups: List<String>) {

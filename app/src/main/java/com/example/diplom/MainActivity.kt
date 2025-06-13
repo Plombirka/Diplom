@@ -11,6 +11,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+
         val Raspisanie = findViewById<Button>(R.id.button1)
         val Prepodavateli = findViewById<Button>(R.id.button2)
         val Novosti = findViewById<Button>(R.id.button3)

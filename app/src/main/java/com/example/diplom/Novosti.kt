@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.diplom.adapters.PostAdapter
 import com.example.diplom.viewmodels.NewsViewModel
+import com.example.diplom.utils.NetworkUtils // Импортируем наш новый утилитарный класс
 
 class Novosti : Fragment() {
 
@@ -47,6 +48,9 @@ class Novosti : Fragment() {
         setupObservers()
         Log.d("NovostiFragment", "setupObservers: Наблюдатели настроены.")
         setupSwipeRefresh()
+
+        // Изначальная проверка интернет-соединения при создании View
+        checkNetworkAndLoadPosts()
     }
 
     private fun setupRecyclerView() {
@@ -62,8 +66,13 @@ class Novosti : Fragment() {
                     val totalItemCount = layoutManager.itemCount
                     val firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition()
 
-                    if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount - 5 && firstVisibleItemPosition >= 0) {
-                        newsViewModel.loadMorePosts()
+                    if (!newsViewModel.isLoading.value!! && (visibleItemCount + firstVisibleItemPosition) >= totalItemCount - 5 && firstVisibleItemPosition >= 0) {
+                        // Проверяем соединение перед загрузкой новых постов при скролле
+                        if (NetworkUtils.isNetworkAvailable(requireContext())) {
+                            newsViewModel.loadMorePosts()
+                        } else {
+                            Toast.makeText(context, "Нет интернет-соединения. Не удалось загрузить больше новостей.", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             })
@@ -81,9 +90,11 @@ class Novosti : Fragment() {
         }
 
         newsViewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
+            // Убедитесь, что progressBar скрывается только тогда, когда SwipeRefresh не активен
             if (!swipeRefreshLayout.isRefreshing) {
                 progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
             }
+            // Всегда останавливаем SwipeRefresh, когда загрузка завершена
             if (!isLoading) {
                 swipeRefreshLayout.isRefreshing = false
             }
@@ -92,8 +103,9 @@ class Novosti : Fragment() {
         newsViewModel.errorMessage.observe(viewLifecycleOwner) { message ->
             message?.let {
                 Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-                // !!! ИСПРАВЛЕНИЕ ЗДЕСЬ: Вызываем метод ViewModel для очистки ошибки
-                newsViewModel.clearErrorMessage()
+                newsViewModel.clearErrorMessage() // Вызываем метод ViewModel для очистки ошибки
+                progressBar.visibility = View.GONE // Скрываем прогресс-бар при ошибке
+                swipeRefreshLayout.isRefreshing = false // Останавливаем обновление
             }
         }
     }
@@ -101,7 +113,25 @@ class Novosti : Fragment() {
     private fun setupSwipeRefresh() {
         swipeRefreshLayout.setOnRefreshListener {
             Log.d("NovostiFragment", "SwipeRefresh triggered.")
+            // Проверяем интернет перед обновлением
+            if (NetworkUtils.isNetworkAvailable(requireContext())) {
+                newsViewModel.refreshPosts()
+            } else {
+                Toast.makeText(requireContext(), "Нет интернет-соединения. Не удалось обновить новости.", Toast.LENGTH_SHORT).show()
+                swipeRefreshLayout.isRefreshing = false // Останавливаем индикатор обновления
+            }
+        }
+    }
+
+    // Метод для первоначальной загрузки постов с проверкой сети
+    private fun checkNetworkAndLoadPosts() {
+        if (NetworkUtils.isNetworkAvailable(requireContext())) {
+            // Если интернета нет, refreshPosts() не будет вызван.
+            // При наличии интернета, refreshPosts() начнет загрузку с нуля.
             newsViewModel.refreshPosts()
+        } else {
+            progressBar.visibility = View.GONE // Скрываем прогресс-бар, так как нет интернета
+            Toast.makeText(requireContext(), "Нет интернет-соединения. Пожалуйста, проверьте ваше подключение.", Toast.LENGTH_LONG).show()
         }
     }
 }
